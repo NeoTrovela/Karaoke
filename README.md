@@ -21,6 +21,8 @@ heuristics instead of true pitch-accuracy grading, etc.), see [`docs/ARCHITECTUR
 
 ## Documentation
 
+- [`docs/PLAN.md`](docs/PLAN.md) — the build plan as a step-by-step checklist (what's done, what's
+  next).
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the app is laid out: project structure,
   the room/session model, the WebRTC mic-streaming flow, and the build roadmap.
 - [`docs/TECH_STACK.md`](docs/TECH_STACK.md) — what technologies are used, where, and why.
