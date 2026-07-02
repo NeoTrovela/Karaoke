@@ -5,6 +5,7 @@ import { PORT, getLocalIp } from "./config.js";
 import { RoomStore } from "./rooms/RoomStore.js";
 import { registerHostHandlers } from "./sockets/hostHandlers.js";
 import { registerPlayerHandlers } from "./sockets/playerHandlers.js";
+import { registerSignalingHandlers } from "./sockets/signalingHandlers.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,6 +23,7 @@ io.on("connection", (socket) => {
 
   registerHostHandlers(io, socket, roomStore);
   registerPlayerHandlers(io, socket, roomStore);
+  registerSignalingHandlers(io, socket);
 
   socket.on("disconnect", () => {
     console.log(`socket disconnected: ${socket.id}`);
