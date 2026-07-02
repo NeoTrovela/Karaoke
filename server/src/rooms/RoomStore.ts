@@ -5,6 +5,9 @@ export class RoomStore {
   private rooms = new Map<string, Room>();
 
   createRoom(hostSocketId: string): Room {
+    const existing = this.getRoomByHostSocketId(hostSocketId);
+    if (existing) return existing;
+
     let code = generateRoomCode();
     while (this.rooms.has(code)) {
       code = generateRoomCode();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getSocket } from "../lib/socket";
 import JoinForm from "../components/player/JoinForm";
@@ -10,6 +10,19 @@ export default function PlayerPage() {
   const [joinedCode, setJoinedCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [roomClosed, setRoomClosed] = useState(false);
+
+  useEffect(() => {
+    if (!joinedCode) return;
+    const socket = getSocket();
+    function handleRoomClosed() {
+      setRoomClosed(true);
+    }
+    socket.on("room:closed", handleRoomClosed);
+    return () => {
+      socket.off("room:closed", handleRoomClosed);
+    };
+  }, [joinedCode]);
 
   function handleJoin(code: string, displayName: string) {
     setSubmitting(true);
@@ -41,9 +54,13 @@ export default function PlayerPage() {
   if (joinedCode) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 text-white">
-        <h1 className="text-3xl font-bold">You're in!</h1>
+        <h1 className="text-3xl font-bold">{roomClosed ? "Room closed" : "You're in!"}</h1>
         <p className="text-slate-400">
-          Waiting for the host to start room <span className="font-mono">{joinedCode}</span>…
+          {roomClosed ? (
+            "The host ended this session."
+          ) : (
+            <>Waiting for the host to start room <span className="font-mono">{joinedCode}</span>…</>
+          )}
         </p>
       </div>
     );
