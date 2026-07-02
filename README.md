@@ -1,5 +1,7 @@
 # Karaoke Party
 
+[![CI](https://github.com/NeoTrovela/Karaoke/actions/workflows/ci.yml/badge.svg)](https://github.com/NeoTrovela/Karaoke/actions/workflows/ci.yml)
+
 A party karaoke app that turns a computer (hooked up to a TV/speakers) into a shared karaoke
 stage, and everyone's phone into their own wireless mic — no app installs required.
 
