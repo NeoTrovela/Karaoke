@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
 import { PORT, getLocalIp } from "./config.js";
+import { registerSignalingHandlers } from "./sockets/signalingHandlers.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -15,6 +16,8 @@ app.get("/health", (_req, res) => {
 
 io.on("connection", (socket) => {
   console.log(`socket connected: ${socket.id}`);
+
+  registerSignalingHandlers(io, socket);
 
   socket.on("disconnect", () => {
     console.log(`socket disconnected: ${socket.id}`);
