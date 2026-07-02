@@ -30,7 +30,7 @@ Four decisions were locked in before building, and shouldn't be revisited withou
 
 - [x] **Scaffold** — npm-workspaces monorepo, server boots (Express + Socket.io), client builds
       (Vite + React + Tailwind), pushed to GitHub.
-- [ ] **M1 — Room lifecycle + signaling skeleton**: create/join a room, QR + code display, live
+- [x] **M1 — Room lifecycle + signaling skeleton**: create/join a room, QR + code display, live
       waiting-room player list. No audio/video yet.
   - Verify: player list updates live as phones join/leave; test a bad/unknown room code.
 - [ ] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
