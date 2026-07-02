@@ -30,9 +30,39 @@ Four decisions were locked in before building, and shouldn't be revisited withou
 
 - [x] **Scaffold** — npm-workspaces monorepo, server boots (Express + Socket.io), client builds
       (Vite + React + Tailwind), pushed to GitHub.
+  - Implementation: root `package.json` sets up npm workspaces (`server`, `client`). `server/`
+    is Express + `http` + Socket.io bootstrapped in `src/index.ts`, with `src/config.ts` reading
+    `PORT` and detecting the host's LAN IP (`getLocalIp()`) so the QR code is reachable from
+    phones; a `/health` endpoint returns `{ok:true}`. `client/` is Vite + React 19 + TypeScript +
+    Tailwind v4, with `react-router-dom` routes for `/`, `/host`, `/play/:code` and stub pages.
+    Commit `7af9fb3`.
 - [x] **M1 — Room lifecycle + signaling skeleton**: create/join a room, QR + code display, live
       waiting-room player list. No audio/video yet.
   - Verify: player list updates live as phones join/leave; test a bad/unknown room code.
+  - Implementation: built as two parallel PRs, merged in this order:
+    - **WebRTC signaling skeleton** (PR [#1](https://github.com/NeoTrovela/Karaoke/pull/1),
+      commit `ddb8e1b`): `server/src/sockets/signalingHandlers.ts` is a pure Socket.io relay for
+      `webrtc:offer`/`webrtc:answer`/`webrtc:ice-candidate`, forwarded by target socket id with
+      no room-membership validation yet. Client side, `client/src/lib/webrtc/HostPeerManager.ts`
+      (host: one recvonly `RTCPeerConnection` per phone) and `PlayerPeerConnection.ts` (player:
+      one connection to the host, with a `setLocalStream()` hook left for M2's mic capture) both
+      take an already-connected `Socket` via constructor injection rather than owning a socket
+      singleton, so they wouldn't collide with the room-lifecycle branch's socket setup.
+    - **Room lifecycle** (PR [#2](https://github.com/NeoTrovela/Karaoke/pull/2), commit
+      `9f49bfd`, fixed in `b4c7db0`): `server/src/rooms/{RoomStore,roomCode,types}.ts` hold an
+      in-memory `Map<code, Room>`, with 5-char codes excluding visually ambiguous characters
+      (`0/O`, `1/I/L`). `server/src/sockets/{hostHandlers,playerHandlers}.ts` add the
+      `host:create-room` / `player:join-room` handlers and broadcast `room:players` on join/leave.
+      Client side, `client/src/lib/socket.ts` is a lazy Socket.io-client singleton;
+      `components/host/{RoomCodeQr,WaitingRoom}.tsx` and `components/player/JoinForm.tsx` render
+      the QR/code display, live player list, and join form, wired into `pages/HostPage.tsx` and
+      `pages/PlayerPage.tsx`. A follow-up fix (`b4c7db0`) added a `room:closed` listener in
+      `PlayerPage` (the host disconnecting wasn't surfaced to players before this) and made
+      `RoomStore.createRoom` idempotent per host socket id (a `HostPage` remount was otherwise
+      leaking an orphaned room each time).
+    - Merging PR #2 into `main` after PR #1 required resolving a small conflict in
+      `server/src/index.ts`, where both PRs added an import and a handler-registration call
+      (commit `4bb07fa`); both sets were kept.
 - [ ] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
       one phone and the host, host plays the incoming stream. The riskiest plumbing in the app.
   - Verify: test with phone muted/headphones first to confirm connectivity without feedback, then
@@ -85,5 +115,6 @@ logs during testing.
 
 ---
 
-As each milestone is completed, update its checkbox to `[x]` so this file stays trustworthy as a
-progress tracker.
+As each milestone is completed, update its checkbox to `[x]` and add an "Implementation" note
+(files touched, key commits/PRs, any deviation from the original plan) so this file stays
+trustworthy as both a progress tracker and a changelog.
