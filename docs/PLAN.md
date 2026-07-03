@@ -104,6 +104,19 @@ Four decisions were locked in before building, and shouldn't be revisited withou
 - [ ] **Post-MVP** (documented, not yet planned in detail): TURN server for cross-network
       reliability, per-player host-side gain control, in-app YouTube search, reconnect handling,
       duet-mode visuals.
+  - Deployment: split into two deploys — static client build to Vercel/Netlify/Cloudflare Pages,
+    and a small always-on Node process for the Express+Socket.io signaling server on a platform
+    with real persistent WebSocket support (Render/Fly.io/Railway/a VPS — not typical serverless
+    functions). A real deployment gets automatic HTTPS/WSS from the platform, which removes the
+    need for the local `mkcert` self-signed-cert workaround required for phone `getUserMedia`
+    access on bare LAN/HTTP. Before deploying: lock down Socket.io's CORS (currently `origin: "*"`
+    in `server/src/index.ts`) to the real domain, and note `RoomStore`'s in-memory `Map` means any
+    restart/redeploy wipes all live rooms (already an accepted known limitation, but matters more
+    on platforms that spin down idle instances than on a laptop). STUN-only WebRTC should still
+    work fine since phones typically share the same room's wifi even with cloud-hosted signaling —
+    TURN stays deferred as already planned. Recommendation: don't deploy until M2–M6 are done and
+    tested on LAN, since deploying only changes where signaling runs, not the app logic, and local
+    iteration is faster.
 
 ## Known limitations (accepted, not oversights)
 
