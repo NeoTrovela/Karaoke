@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getSocket } from "../lib/socket";
+import { PlayerPeerConnection } from "../lib/webrtc/PlayerPeerConnection";
 import JoinForm from "../components/player/JoinForm";
 
 type JoinRoomResponse = { ok: true; code: string } | { ok: false; error: string };
@@ -11,12 +12,25 @@ export default function PlayerPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [roomClosed, setRoomClosed] = useState(false);
+  const [micLive, setMicLive] = useState(false);
+
+  const peerRef = useRef<PlayerPeerConnection | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  function stopMic() {
+    peerRef.current?.close();
+    peerRef.current = null;
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setMicLive(false);
+  }
 
   useEffect(() => {
     if (!joinedCode) return;
     const socket = getSocket();
     function handleRoomClosed() {
       setRoomClosed(true);
+      stopMic();
     }
     socket.on("room:closed", handleRoomClosed);
     return () => {
@@ -24,10 +38,31 @@ export default function PlayerPage() {
     };
   }, [joinedCode]);
 
-  function handleJoin(code: string, displayName: string) {
+  // Release the mic if the player navigates away mid-session.
+  useEffect(() => stopMic, []);
+
+  async function handleJoin(code: string, displayName: string) {
     setSubmitting(true);
     setError(null);
+
+    let stream: MediaStream;
+    try {
+      // Must be called synchronously from the click/submit that triggered this
+      // handler (iOS Safari requires getUserMedia to originate from a user gesture).
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+    } catch {
+      setSubmitting(false);
+      setError("Microphone access is required to sing. Allow mic access and try again.");
+      return;
+    }
+    streamRef.current = stream;
+
     const socket = getSocket();
+    peerRef.current = new PlayerPeerConnection(socket);
+    peerRef.current.setLocalStream(stream);
+    setMicLive(true);
 
     function attempt() {
       socket.emit(
@@ -39,6 +74,7 @@ export default function PlayerPage() {
             setJoinedCode(res.code);
           } else {
             setError(res.error);
+            stopMic();
           }
         },
       );
@@ -62,6 +98,9 @@ export default function PlayerPage() {
             <>Waiting for the host to start room <span className="font-mono">{joinedCode}</span>…</>
           )}
         </p>
+        {!roomClosed && micLive && (
+          <p className="text-sm text-emerald-400">🎤 Mic connected — sing whenever you're ready!</p>
+        )}
       </div>
     );
   }
