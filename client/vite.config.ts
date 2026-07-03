@@ -22,5 +22,18 @@ export default defineConfig({
     https: hasCerts
       ? { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) }
       : undefined,
+    // Proxy Socket.io to the backend so it shares this page's origin/port.
+    // Phones only ever get one self-signed-cert warning to accept (this
+    // origin) — a direct connection to the backend's own port would be a
+    // second origin, and browsers never offer a click-through for untrusted
+    // certs on background WebSocket/XHR requests, only page navigations.
+    proxy: {
+      '/socket.io': {
+        target: `${hasCerts ? 'https' : 'http'}://localhost:3001`,
+        ws: true,
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 })

@@ -109,12 +109,24 @@ Four decisions were locked in before building, and shouldn't be revisited withou
       of logic — keeps a `Map<playerId, HTMLAudioElement>`, creates an `Audio()` per incoming
       stream and sets `.srcObject`, cleaning up on disconnect. `WaitingRoom.tsx` also gained a 🎤
       badge per player once their stream is live, purely as a manual-testing/verification aid.
-    - Verified live in two browser tabs on `http://localhost:5173` (a secure context regardless of
-      HTTPS): join flow → mic-permission prompt → host's waiting-room list shows the 🎤 badge
-      (proving a real track arrived over the peer connection) → disconnecting the player tab
-      correctly clears both the roster entry and the host's audio element. Browser automation
-      can't click through the OS-level mic-permission dialog or the HTTPS cert warning (by design,
-      not a bug), so those two clicks were done manually during this verification pass.
+    - **Socket.io same-origin proxy** (`client/vite.config.ts`, `client/src/lib/socket.ts`):
+      discovered during real-phone testing, not the earlier localhost pass — a phone that accepts
+      the self-signed cert warning for the page (port 5173) does *not* thereby trust the same cert
+      served on the backend's own port (3001). Browsers only offer a click-through warning for
+      page navigations, never for background WebSocket/XHR requests, so the phone's Socket.io
+      connection to port 3001 failed silently and joining hung forever on "Joining...". Fixed by
+      adding a Vite dev proxy (`server.proxy['/socket.io']`, `ws: true`, `secure: false`) that
+      forwards to the backend over loopback, and pointing the client at `window.location.origin`
+      instead of a hardcoded `:3001` — now there's only ever one origin/cert for a phone to accept.
+    - Verified live in two ways: (1) two browser tabs on `http://localhost:5173` (a secure context
+      regardless of HTTPS) — join flow → mic-permission prompt → host's waiting-room list shows
+      the 🎤 badge (proving a real track arrived over the peer connection) → disconnecting the
+      player tab correctly clears both the roster entry and the host's audio element; (2) a real
+      phone on the same wifi joining the HTTPS/LAN-IP host over the QR code, which is what
+      surfaced the same-origin proxy bug above — after the fix, the phone's mic reached the host
+      exactly like the two-tab test. Browser automation can't click through the OS-level
+      mic-permission dialog or the HTTPS cert warning (by design, not a bug), so those clicks were
+      done manually during both verification passes.
 - [ ] **M3 — YouTube embed + playback control**: paste-a-URL video ID parsing, fullscreen stage,
       room-code overlay.
   - Verify: test a known-embeddable and a known-non-embeddable video to confirm error handling;
