@@ -63,7 +63,7 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     - Merging PR #2 into `main` after PR #1 required resolving a small conflict in
       `server/src/index.ts`, where both PRs added an import and a handler-registration call
       (commit `4bb07fa`); both sets were kept.
-- [x] **CI pipeline** — lint + typecheck/build checks on every PR and push to `main`, no
+- [x] **CI pipeline** — lint + typecheck/test/build checks on every PR and push to `main`, no
       deployment yet (the app has no hosting target — added once the MVP is feature-complete and
       a host is chosen).
   - Verify: push the branch, confirm the Actions tab runs and passes; deliberately break a check
@@ -74,11 +74,18 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     v21.7.3 was unsupported by `oxlint`/`vite`, confirmed during M1); once the dev machine was
     upgraded to Node 22 via `nvm` (and `server/package.json`'s `@types/node` bumped to match),
     CI was moved to Node 22 too so local and CI stay aligned. Steps: `npm ci`, `lint` for both
-    workspaces, then `build` for both (the `build` scripts already run a full `tsc` typecheck).
-    No test step yet — no test framework is installed in either workspace, so a placeholder test
-    step would just be theater; add one once a framework (e.g. Vitest) is introduced. A CI status
-    badge was added to the root `README.md`. Branch protection requiring this check on `main` is
-    a manual GitHub Settings step, not something committed to the repo.
+    workspaces, then `build` for both. A CI status badge was added to the root `README.md`.
+    Branch protection requiring this check on `main` is a manual GitHub Settings step, not
+    something committed to the repo.
+  - Implementation (update): added Vitest to `server` (`npm run test`) once M1/M2 gave it
+    actually-unit-testable logic — `RoomStore.test.ts`, `roomCode.test.ts` (5-char codes, no
+    visually-ambiguous characters), and `signalingHandlers.test.ts` (relay behavior, using plain
+    `vi.fn()` doubles for `io`/`socket` rather than a real Socket.io server). `client` still has no
+    test framework — nothing there is unit-testable yet independent of a real browser/DOM. Since
+    `tsc`'s `include: ["src"]` would otherwise compile `*.test.ts` into `dist/`, `build` now runs
+    against a new `tsconfig.build.json` (extends the base config, excludes test files) while a new
+    `typecheck` script (`tsc --noEmit` on the base config) still typechecks the tests themselves.
+    CI gained `typecheck` and `test` steps for `server`, both before `build`.
 - [x] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
       one phone and the host, host plays the incoming stream. The riskiest plumbing in the app.
   - Verify: test with phone muted/headphones first to confirm connectivity without feedback, then
