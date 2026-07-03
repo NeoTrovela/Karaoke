@@ -70,13 +70,15 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     on a throwaway commit to confirm it goes red, then revert.
   - Implementation: `server/package.json` gained an `oxlint` dev dependency, `lint` script, and
     `.oxlintrc.json` (mirroring `client/`) so both workspaces are lint-covered, not just the
-    client. `.github/workflows/ci.yml` runs on Node 20 (the local dev machine's Node v21.7.3 is
-    unsupported by `oxlint`/`vite`, confirmed during M1 — CI intentionally avoids that mismatch):
-    `npm ci`, `lint` for both workspaces, then `build` for both (the `build` scripts already run a
-    full `tsc` typecheck). No test step yet — no test framework is installed in either workspace,
-    so a placeholder test step would just be theater; add one once a framework (e.g. Vitest) is
-    introduced. A CI status badge was added to the root `README.md`. Branch protection requiring
-    this check on `main` is a manual GitHub Settings step, not something committed to the repo.
+    client. `.github/workflows/ci.yml` originally pinned Node 20 (the local dev machine's Node
+    v21.7.3 was unsupported by `oxlint`/`vite`, confirmed during M1); once the dev machine was
+    upgraded to Node 22 via `nvm` (and `server/package.json`'s `@types/node` bumped to match),
+    CI was moved to Node 22 too so local and CI stay aligned. Steps: `npm ci`, `lint` for both
+    workspaces, then `build` for both (the `build` scripts already run a full `tsc` typecheck).
+    No test step yet — no test framework is installed in either workspace, so a placeholder test
+    step would just be theater; add one once a framework (e.g. Vitest) is introduced. A CI status
+    badge was added to the root `README.md`. Branch protection requiring this check on `main` is
+    a manual GitHub Settings step, not something committed to the repo.
 - [ ] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
       one phone and the host, host plays the incoming stream. The riskiest plumbing in the app.
   - Verify: test with phone muted/headphones first to confirm connectivity without feedback, then
