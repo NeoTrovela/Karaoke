@@ -79,10 +79,42 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     step would just be theater; add one once a framework (e.g. Vitest) is introduced. A CI status
     badge was added to the root `README.md`. Branch protection requiring this check on `main` is
     a manual GitHub Settings step, not something committed to the repo.
-- [ ] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
+- [x] **M2 — Single phone mic → host playback (WebRTC)**: the offer/answer/ICE handshake between
       one phone and the host, host plays the incoming stream. The riskiest plumbing in the app.
   - Verify: test with phone muted/headphones first to confirm connectivity without feedback, then
     live; try one phone on cellular data to gauge whether STUN alone is enough.
+  - Implementation: the offer/answer/ICE exchange itself already existed from M1's signaling
+    skeleton (`HostPeerManager`/`PlayerPeerConnection`), so this milestone was mostly wiring it to
+    real mic capture and real playback:
+    - **Local HTTPS** (`scripts/setup-https.sh`, new): `getUserMedia` requires a secure context,
+      which phones don't get over bare LAN HTTP. The script runs `mkcert` for `localhost`,
+      `127.0.0.1`, and the machine's LAN IP, writing to a gitignored `certs/` dir. `npm run
+      setup:https` wraps it. `client/vite.config.ts` and `server/src/index.ts` both check for
+      `certs/cert.pem`/`key.pem` and use HTTPS/`https.createServer` when present, otherwise fall
+      back to plain HTTP so `npm run dev` still works untouched. `client/src/lib/socket.ts` now
+      derives the Socket.io URL's scheme from `window.location.protocol` instead of hardcoding
+      `http://`. Note: `mkcert -install` (trusting the CA system-wide) needs an interactive sudo
+      prompt, so the script treats that step as best-effort — without it, anyone loading the app
+      (including the host) sees one "not private" browser warning to click through, same as a
+      guest phone would; this matches the plan already recorded under Post-MVP deployment notes.
+    - **Player mic capture** (`client/src/pages/PlayerPage.tsx`): calls `getUserMedia` from inside
+      the join button's submit handler (must originate from a user gesture for iOS Safari), then
+      constructs a `PlayerPeerConnection` and calls its pre-existing `setLocalStream()` hook. Mic
+      tracks and the peer connection are torn down on room-closed or unmount.
+    - **Host wiring** (`client/src/pages/HostPage.tsx`): instantiates `HostPeerManager` once and
+      diffs each `room:players` update against the previous player-id set, calling
+      `connectToPlayer()`/`disconnectPlayer()` for joins/leaves — this is what actually drives the
+      offer creation that already existed in `HostPeerManager`.
+    - **Host playback** (`HostPage.tsx`'s `onPlayerStream` callback): the one genuinely new piece
+      of logic — keeps a `Map<playerId, HTMLAudioElement>`, creates an `Audio()` per incoming
+      stream and sets `.srcObject`, cleaning up on disconnect. `WaitingRoom.tsx` also gained a 🎤
+      badge per player once their stream is live, purely as a manual-testing/verification aid.
+    - Verified live in two browser tabs on `http://localhost:5173` (a secure context regardless of
+      HTTPS): join flow → mic-permission prompt → host's waiting-room list shows the 🎤 badge
+      (proving a real track arrived over the peer connection) → disconnecting the player tab
+      correctly clears both the roster entry and the host's audio element. Browser automation
+      can't click through the OS-level mic-permission dialog or the HTTPS cert warning (by design,
+      not a bug), so those two clicks were done manually during this verification pass.
 - [ ] **M3 — YouTube embed + playback control**: paste-a-URL video ID parsing, fullscreen stage,
       room-code overlay.
   - Verify: test a known-embeddable and a known-non-embeddable video to confirm error handling;

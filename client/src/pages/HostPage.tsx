@@ -1,14 +1,47 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSocket, type PlayerSummary } from "../lib/socket";
+import { HostPeerManager } from "../lib/webrtc/HostPeerManager";
 import RoomCodeQr from "../components/host/RoomCodeQr";
 import WaitingRoom from "../components/host/WaitingRoom";
 
 export default function HostPage() {
   const [code, setCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
+  const [livePlayerIds, setLivePlayerIds] = useState<Set<string>>(new Set());
+
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const knownPlayerIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const socket = getSocket();
+    const audioElements = audioElementsRef.current;
+
+    function playStream(playerId: string, stream: MediaStream) {
+      let audio = audioElements.get(playerId);
+      if (!audio) {
+        audio = new Audio();
+        audio.autoplay = true;
+        audioElements.set(playerId, audio);
+      }
+      audio.srcObject = stream;
+      setLivePlayerIds((prev) => new Set(prev).add(playerId));
+    }
+
+    function stopStream(playerId: string) {
+      const audio = audioElements.get(playerId);
+      if (audio) {
+        audio.pause();
+        audio.srcObject = null;
+        audioElements.delete(playerId);
+      }
+      setLivePlayerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(playerId);
+        return next;
+      });
+    }
+
+    const peerManager = new HostPeerManager(socket, playStream);
 
     function createRoom() {
       socket.emit("host:create-room", (res: { code: string }) => {
@@ -22,13 +55,36 @@ export default function HostPage() {
       socket.once("connect", createRoom);
     }
 
-    socket.on("room:players", ({ players }: { players: PlayerSummary[] }) => {
-      setPlayers(players);
-    });
+    function handlePlayers({ players: nextPlayers }: { players: PlayerSummary[] }) {
+      setPlayers(nextPlayers);
+
+      const nextIds = new Set(nextPlayers.map((player) => player.id));
+      for (const id of nextIds) {
+        if (!knownPlayerIdsRef.current.has(id)) {
+          peerManager.connectToPlayer(id);
+        }
+      }
+      for (const id of knownPlayerIdsRef.current) {
+        if (!nextIds.has(id)) {
+          peerManager.disconnectPlayer(id);
+          stopStream(id);
+        }
+      }
+      knownPlayerIdsRef.current = nextIds;
+    }
+
+    socket.on("room:players", handlePlayers);
 
     return () => {
       socket.off("connect", createRoom);
-      socket.off("room:players");
+      socket.off("room:players", handlePlayers);
+      peerManager.disconnectAll();
+      for (const audio of audioElements.values()) {
+        audio.pause();
+        audio.srcObject = null;
+      }
+      audioElements.clear();
+      knownPlayerIdsRef.current = new Set();
     };
   }, []);
 
@@ -38,7 +94,7 @@ export default function HostPage() {
       {code ? (
         <>
           <RoomCodeQr code={code} />
-          <WaitingRoom players={players} />
+          <WaitingRoom players={players} livePlayerIds={livePlayerIds} />
         </>
       ) : (
         <p className="text-slate-400">Creating room…</p>
