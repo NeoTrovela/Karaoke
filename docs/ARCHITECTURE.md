@@ -45,7 +45,7 @@ karaoke/
     ├── lib/audio/PitchAnalyzer.ts         # AnalyserNode + pitchy
     ├── lib/audio/scoreEngine.ts           # composite "fun score"
     └── components/
-        ├── host/{RoomCodeQr,WaitingRoom,VideoSearchBar,YoutubeStage,Leaderboard}.tsx
+        ├── host/{RoomCodeQr,WaitingRoom,VideoUrlForm,YoutubeStage,Leaderboard}.tsx
         └── player/{JoinForm,MicPermissionGate,LiveMicPanel}.tsx
 ```
 

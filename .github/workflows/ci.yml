@@ -23,6 +23,7 @@ jobs:
 
       - run: npm run typecheck --workspace=server
       - run: npm run test --workspace=server
+      - run: npm run test --workspace=client
 
       - run: npm run build --workspace=server
       - run: npm run build --workspace=client
