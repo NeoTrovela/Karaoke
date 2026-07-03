@@ -134,10 +134,35 @@ Four decisions were locked in before building, and shouldn't be revisited withou
       exactly like the two-tab test. Browser automation can't click through the OS-level
       mic-permission dialog or the HTTPS cert warning (by design, not a bug), so those clicks were
       done manually during both verification passes.
-- [ ] **M3 — YouTube embed + playback control**: paste-a-URL video ID parsing, fullscreen stage,
+- [x] **M3 — YouTube embed + playback control**: paste-a-URL video ID parsing, fullscreen stage,
       room-code overlay.
   - Verify: test a known-embeddable and a known-non-embeddable video to confirm error handling;
     confirm fullscreen requires the manual button (browser gesture requirement).
+  - Implementation: entirely host-side UI — phones never see video, only send mic audio, so no
+    server/socket changes were needed; video state is plain React state on `HostPage`.
+    `client/src/lib/youtube/parseVideoId.ts` is a pure `parseYoutubeVideoId(input): string | null`
+    covering bare 11-char ids, `watch?v=`, `youtu.be/`, `embed/`, and `shorts/` URL forms, with a
+    Vitest suite (`parseVideoId.test.ts`) — the first client-side tests in the repo, so `vitest`
+    was added to `client/package.json` alongside the existing server suite (no build-output-leak
+    concern here unlike the server: `tsc -b` is already `noEmit`, and `vite build` only bundles
+    what the app entry imports). `errorMessages.ts` maps the YouTube IFrame API's `onError` codes
+    (2/5/100/101/150) to friendly messages. `components/host/VideoUrlForm.tsx` is the paste-a-URL
+    input (styled like `JoinForm.tsx`); `components/host/YoutubeStage.tsx` wraps `react-youtube`
+    (already an unused scaffold dependency) full-bleed, with a manual "Fullscreen" button
+    (`requestFullscreen()` on a gesture, per the verify note above), the room-code text badge, and
+    "Change video"/auto-return-on-`onEnd` to go back to the picker. `HostPage.tsx` now branches on
+    `videoId`: none → existing QR/waiting-room view with the URL form always visible alongside it
+    (chosen over gating behind a separate "Start Game" step); set → full takeover by
+    `YoutubeStage`, replacing the waiting-room view. The existing `HostPeerManager`/audio-mixing
+    logic is untouched (imperative, ref-based, not tied to the JSX tree), so switching between
+    views doesn't disrupt in-progress WebRTC connections. One real bug caught in live testing: the
+    embedded video initially rendered as a blank black rect — `react-youtube`'s `className` prop
+    styles its own wrapper div, not the iframe, so `h-full w-full` (a percentage) collapsed to
+    zero against a wrapper with no explicit height; fixed by giving the wrapper `absolute inset-0`
+    (sized by explicit offsets, not a percentage) and moving `h-full w-full` to `iframeClassName`.
+    Verified live: a known-embeddable video (YouTube's own "Me at the zoo") loads and plays; an
+    invalid id surfaces the mapped error message with a working way back; letting the video play
+    to completion auto-returns to the picker with the room/players untouched.
 - [ ] **M4 — Multiple simultaneous mics**: extend the host's peer-connection manager to cleanly
       handle N concurrent connections with cleanup on disconnect.
   - Verify: 2-3 phones singing simultaneously, confirm all are audible and one disconnecting

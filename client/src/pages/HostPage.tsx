@@ -3,11 +3,14 @@ import { getSocket, type PlayerSummary } from "../lib/socket";
 import { HostPeerManager } from "../lib/webrtc/HostPeerManager";
 import RoomCodeQr from "../components/host/RoomCodeQr";
 import WaitingRoom from "../components/host/WaitingRoom";
+import VideoUrlForm from "../components/host/VideoUrlForm";
+import YoutubeStage from "../components/host/YoutubeStage";
 
 export default function HostPage() {
   const [code, setCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [livePlayerIds, setLivePlayerIds] = useState<Set<string>>(new Set());
+  const [videoId, setVideoId] = useState<string | null>(null);
 
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const knownPlayerIdsRef = useRef<Set<string>>(new Set());
@@ -88,6 +91,12 @@ export default function HostPage() {
     };
   }, []);
 
+  if (code && videoId) {
+    return (
+      <YoutubeStage videoId={videoId} roomCode={code} onChangeVideo={() => setVideoId(null)} />
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-10 bg-slate-950 text-white">
       <h1 className="text-3xl font-bold">Host a Game</h1>
@@ -95,6 +104,7 @@ export default function HostPage() {
         <>
           <RoomCodeQr code={code} />
           <WaitingRoom players={players} livePlayerIds={livePlayerIds} />
+          <VideoUrlForm onSubmit={setVideoId} />
         </>
       ) : (
         <p className="text-slate-400">Creating room…</p>
