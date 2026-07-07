@@ -1,10 +1,13 @@
 import { useRef, useState } from "react";
 import YouTube, { type YouTubeEvent } from "react-youtube";
 import { describeYoutubeError } from "../../lib/youtube/errorMessages";
+import type { PlayerSummary } from "../../lib/socket";
+import Leaderboard from "./Leaderboard";
 
 interface YoutubeStageProps {
   videoId: string;
   roomCode: string;
+  players: PlayerSummary[];
   onChangeVideo: () => void;
 }
 
@@ -19,7 +22,12 @@ const PLAYER_OPTS = {
   },
 };
 
-export default function YoutubeStage({ videoId, roomCode, onChangeVideo }: YoutubeStageProps) {
+export default function YoutubeStage({
+  videoId,
+  roomCode,
+  players,
+  onChangeVideo,
+}: YoutubeStageProps) {
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -58,6 +66,8 @@ export default function YoutubeStage({ videoId, roomCode, onChangeVideo }: Youtu
       <div className="fixed top-4 right-4 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
         Room: {roomCode}
       </div>
+
+      <Leaderboard players={players} />
 
       {!error && (
         <div className="fixed bottom-4 right-4 flex gap-2">

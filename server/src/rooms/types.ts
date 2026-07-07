@@ -1,6 +1,7 @@
 export interface Player {
   id: string; // socket id
   displayName: string;
+  score: number;
 }
 
 export interface Room {
@@ -13,8 +14,13 @@ export interface Room {
 export interface PlayerSummary {
   id: string;
   displayName: string;
+  score: number;
 }
 
 export function toPlayerSummaries(room: Room): PlayerSummary[] {
-  return Array.from(room.players.values()).map(({ id, displayName }) => ({ id, displayName }));
+  return Array.from(room.players.values()).map(({ id, displayName, score }) => ({
+    id,
+    displayName,
+    score,
+  }));
 }

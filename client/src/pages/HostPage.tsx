@@ -93,7 +93,12 @@ export default function HostPage() {
 
   if (code && videoId) {
     return (
-      <YoutubeStage videoId={videoId} roomCode={code} onChangeVideo={() => setVideoId(null)} />
+      <YoutubeStage
+        videoId={videoId}
+        roomCode={code}
+        players={players}
+        onChangeVideo={() => setVideoId(null)}
+      />
     );
   }
 
