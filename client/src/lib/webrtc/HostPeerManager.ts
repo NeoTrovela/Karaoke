@@ -4,9 +4,14 @@ import type { SignalMessage } from "./types";
 
 export type PlayerStreamHandler = (playerId: string, stream: MediaStream) => void;
 
+interface PeerEntry {
+  pc: RTCPeerConnection;
+  pendingCandidates: RTCIceCandidateInit[];
+}
+
 // Host side of the star topology: one recvonly RTCPeerConnection per connected phone.
 export class HostPeerManager {
-  private connections = new Map<string, RTCPeerConnection>();
+  private connections = new Map<string, PeerEntry>();
   private socket: Socket;
   private onPlayerStream: PlayerStreamHandler;
 
@@ -19,7 +24,8 @@ export class HostPeerManager {
 
   async connectToPlayer(playerId: string): Promise<void> {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    this.connections.set(playerId, pc);
+    const entry: PeerEntry = { pc, pendingCandidates: [] };
+    this.connections.set(playerId, entry);
 
     pc.addTransceiver("audio", { direction: "recvonly" });
 
@@ -43,7 +49,7 @@ export class HostPeerManager {
   }
 
   disconnectPlayer(playerId: string): void {
-    this.connections.get(playerId)?.close();
+    this.connections.get(playerId)?.pc.close();
     this.connections.delete(playerId);
   }
 
@@ -54,14 +60,26 @@ export class HostPeerManager {
   }
 
   private handleAnswer = async ({ fromId, data }: SignalMessage): Promise<void> => {
-    const pc = this.connections.get(fromId);
-    if (!pc) return;
-    await pc.setRemoteDescription(data as RTCSessionDescriptionInit);
+    const entry = this.connections.get(fromId);
+    if (!entry) return;
+    await entry.pc.setRemoteDescription(data as RTCSessionDescriptionInit);
+    for (const candidate of entry.pendingCandidates) {
+      await entry.pc.addIceCandidate(candidate);
+    }
+    entry.pendingCandidates = [];
   };
 
+  // ICE candidates can arrive before the answer's setRemoteDescription() resolves
+  // (candidates start flowing almost immediately after createOffer/createAnswer,
+  // often faster than the signaling round-trip) - buffer until it's safe to apply.
   private handleRemoteIceCandidate = async ({ fromId, data }: SignalMessage): Promise<void> => {
-    const pc = this.connections.get(fromId);
-    if (!pc) return;
-    await pc.addIceCandidate(data as RTCIceCandidateInit);
+    const entry = this.connections.get(fromId);
+    if (!entry) return;
+    const candidate = data as RTCIceCandidateInit;
+    if (entry.pc.remoteDescription) {
+      await entry.pc.addIceCandidate(candidate);
+    } else {
+      entry.pendingCandidates.push(candidate);
+    }
   };
 }

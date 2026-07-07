@@ -163,10 +163,31 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     Verified live: a known-embeddable video (YouTube's own "Me at the zoo") loads and plays; an
     invalid id surfaces the mapped error message with a working way back; letting the video play
     to completion auto-returns to the picker with the room/players untouched.
-- [ ] **M4 — Multiple simultaneous mics**: extend the host's peer-connection manager to cleanly
+- [x] **M4 — Multiple simultaneous mics**: extend the host's peer-connection manager to cleanly
       handle N concurrent connections with cleanup on disconnect.
   - Verify: 2-3 phones singing simultaneously, confirm all are audible and one disconnecting
     cleans up properly.
+  - Implementation: the *structure* for N connections already existed from M2 —
+    `HostPeerManager`'s `Map<playerId, RTCPeerConnection>` and `HostPage.tsx`'s per-id
+    `connectToPlayer`/`disconnectPlayer` diffing were already independent per player. The actual
+    gap was a latent race in both `HostPeerManager.ts` and `PlayerPeerConnection.ts`: a
+    `webrtc:ice-candidate` message could be processed before its paired `webrtc:offer`/
+    `webrtc:answer` handler's `await setRemoteDescription(...)` resolved (ICE candidates start
+    flowing almost immediately after `createOffer`/`createAnswer`, often faster than the
+    signaling round-trip), and `addIceCandidate` throws if the remote description isn't set yet.
+    Latent at 1 connection, much more likely to actually fire once several connections stand up
+    back-to-back. Fixed with the standard buffer-and-flush pattern: `HostPeerManager` now keys its
+    map on `{ pc, pendingCandidates: RTCIceCandidateInit[] }` instead of a bare `RTCPeerConnection`,
+    queuing candidates that arrive before `pc.remoteDescription` is set and draining them right
+    after `setRemoteDescription` in `handleAnswer`; `PlayerPeerConnection` gets the same treatment
+    with a single `pendingCandidates` field (also cleared in `close()` so a stale buffer can't leak
+    into a subsequent reconnect). No server or `HostPage.tsx` changes needed. Verified live with
+    one host tab and three player tabs on `localhost` joined via near-simultaneous batched clicks
+    (deliberately stressing the race) — all three completed their handshake and lit up the host's
+    🎤 badges; disconnecting one player tab cleanly cleared only that player's badge/audio element,
+    leaving the other two untouched. Real multi-phone testing (vs. local tabs) remains valuable for
+    real-world network/audio behavior but wasn't required to verify this specific fix, since the
+    race is a software timing issue reproducible without real hardware.
 - [ ] **M5 — Client-side scoring engine**: pitch/volume analysis (`pitchy` + `AnalyserNode`),
       composite score, live visualizer.
   - Verify: deliberately test contrasting inputs (sustained note, silence, shouting, normal
