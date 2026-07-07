@@ -8,6 +8,7 @@ export class PlayerPeerConnection {
   private hostId: string | null = null;
   private localStream: MediaStream | null = null;
   private socket: Socket;
+  private pendingCandidates: RTCIceCandidateInit[] = [];
 
   constructor(socket: Socket) {
     this.socket = socket;
@@ -27,6 +28,7 @@ export class PlayerPeerConnection {
     this.pc?.close();
     this.pc = null;
     this.hostId = null;
+    this.pendingCandidates = [];
     this.socket.off("webrtc:offer", this.handleOffer);
     this.socket.off("webrtc:ice-candidate", this.handleRemoteIceCandidate);
   }
@@ -50,13 +52,26 @@ export class PlayerPeerConnection {
     };
 
     await pc.setRemoteDescription(data as RTCSessionDescriptionInit);
+    for (const candidate of this.pendingCandidates) {
+      await pc.addIceCandidate(candidate);
+    }
+    this.pendingCandidates = [];
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     this.socket.emit("webrtc:answer", { targetId: fromId, data: answer });
   };
 
+  // ICE candidates can arrive before the offer's setRemoteDescription() resolves
+  // (candidates start flowing almost immediately after createOffer, often faster
+  // than the signaling round-trip) - buffer until it's safe to apply.
   private handleRemoteIceCandidate = async ({ fromId, data }: SignalMessage): Promise<void> => {
     if (fromId !== this.hostId || !this.pc) return;
-    await this.pc.addIceCandidate(data as RTCIceCandidateInit);
+    const candidate = data as RTCIceCandidateInit;
+    if (this.pc.remoteDescription) {
+      await this.pc.addIceCandidate(candidate);
+    } else {
+      this.pendingCandidates.push(candidate);
+    }
   };
 }
