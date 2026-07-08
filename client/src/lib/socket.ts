@@ -20,4 +20,5 @@ export function getSocket(): Socket {
 export interface PlayerSummary {
   id: string;
   displayName: string;
+  score: number;
 }

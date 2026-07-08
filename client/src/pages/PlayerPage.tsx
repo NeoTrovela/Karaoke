@@ -2,9 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getSocket } from "../lib/socket";
 import { PlayerPeerConnection } from "../lib/webrtc/PlayerPeerConnection";
+import { PitchAnalyzer } from "../lib/audio/PitchAnalyzer";
+import { ScoreEngine } from "../lib/audio/scoreEngine";
 import JoinForm from "../components/player/JoinForm";
+import ScoreMeter from "../components/player/ScoreMeter";
 
 type JoinRoomResponse = { ok: true; code: string } | { ok: false; error: string };
+
+const ANALYSIS_INTERVAL_MS = 100;
+const SCORE_EMIT_INTERVAL_MS = 500;
 
 export default function PlayerPage() {
   const { code: codeFromUrl } = useParams<{ code?: string }>();
@@ -13,16 +19,33 @@ export default function PlayerPage() {
   const [submitting, setSubmitting] = useState(false);
   const [roomClosed, setRoomClosed] = useState(false);
   const [micLive, setMicLive] = useState(false);
+  const [score, setScore] = useState(0);
+  const [volume, setVolume] = useState(0);
 
   const peerRef = useRef<PlayerPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const analyzerRef = useRef<PitchAnalyzer | null>(null);
+  const analysisIntervalRef = useRef<number | null>(null);
+  const emitIntervalRef = useRef<number | null>(null);
 
   function stopMic() {
     peerRef.current?.close();
     peerRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (analysisIntervalRef.current !== null) {
+      clearInterval(analysisIntervalRef.current);
+      analysisIntervalRef.current = null;
+    }
+    if (emitIntervalRef.current !== null) {
+      clearInterval(emitIntervalRef.current);
+      emitIntervalRef.current = null;
+    }
+    analyzerRef.current?.close();
+    analyzerRef.current = null;
     setMicLive(false);
+    setScore(0);
+    setVolume(0);
   }
 
   useEffect(() => {
@@ -64,6 +87,20 @@ export default function PlayerPage() {
     peerRef.current.setLocalStream(stream);
     setMicLive(true);
 
+    const analyzer = new PitchAnalyzer(stream);
+    const scoreEngine = new ScoreEngine();
+    analyzerRef.current = analyzer;
+
+    analysisIntervalRef.current = window.setInterval(() => {
+      scoreEngine.addSample(analyzer.analyze());
+      setScore(scoreEngine.getScore());
+      setVolume(scoreEngine.getVolume());
+    }, ANALYSIS_INTERVAL_MS);
+
+    emitIntervalRef.current = window.setInterval(() => {
+      socket.emit("player:score-update", { score: scoreEngine.getScore() });
+    }, SCORE_EMIT_INTERVAL_MS);
+
     function attempt() {
       socket.emit(
         "player:join-room",
@@ -98,9 +135,7 @@ export default function PlayerPage() {
             <>Waiting for the host to start room <span className="font-mono">{joinedCode}</span>…</>
           )}
         </p>
-        {!roomClosed && micLive && (
-          <p className="text-sm text-emerald-400">🎤 Mic connected — sing whenever you're ready!</p>
-        )}
+        {!roomClosed && micLive && <ScoreMeter score={score} volume={volume} />}
       </div>
     );
   }

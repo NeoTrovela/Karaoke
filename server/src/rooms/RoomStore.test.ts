@@ -58,7 +58,7 @@ describe("RoomStore", () => {
   describe("getRoomByPlayerSocketId", () => {
     it("finds the room a player has joined", () => {
       const room = store.createRoom("host-1");
-      room.players.set("player-1", { id: "player-1", displayName: "Neo" });
+      room.players.set("player-1", { id: "player-1", displayName: "Neo", score: 0 });
       expect(store.getRoomByPlayerSocketId("player-1")).toBe(room);
     });
 
@@ -78,17 +78,17 @@ describe("RoomStore", () => {
 });
 
 describe("toPlayerSummaries", () => {
-  it("maps a room's players to their public id/displayName shape", () => {
+  it("maps a room's players to their public id/displayName/score shape", () => {
     const store = new RoomStore();
     const room = store.createRoom("host-1");
-    room.players.set("player-1", { id: "player-1", displayName: "Neo" });
-    room.players.set("player-2", { id: "player-2", displayName: "Trinity" });
+    room.players.set("player-1", { id: "player-1", displayName: "Neo", score: 42 });
+    room.players.set("player-2", { id: "player-2", displayName: "Trinity", score: 0 });
 
     const summaries = toPlayerSummaries(room);
 
     expect(summaries).toHaveLength(2);
-    expect(summaries).toContainEqual({ id: "player-1", displayName: "Neo" });
-    expect(summaries).toContainEqual({ id: "player-2", displayName: "Trinity" });
+    expect(summaries).toContainEqual({ id: "player-1", displayName: "Neo", score: 42 });
+    expect(summaries).toContainEqual({ id: "player-2", displayName: "Trinity", score: 0 });
   });
 
   it("returns an empty array for a room with no players", () => {

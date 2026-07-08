@@ -188,13 +188,44 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     leaving the other two untouched. Real multi-phone testing (vs. local tabs) remains valuable for
     real-world network/audio behavior but wasn't required to verify this specific fix, since the
     race is a software timing issue reproducible without real hardware.
-- [ ] **M5 — Client-side scoring engine**: pitch/volume analysis (`pitchy` + `AnalyserNode`),
-      composite score, live visualizer.
+- [x] **M5 — Client-side scoring engine + live leaderboard**: pitch/volume analysis (`pitchy` +
+      `AnalyserNode`), composite score, live visualizer. Originally scoped as phone-only, but
+      since scores need to reach the server anyway, the core of M6's leaderboard UI was pulled
+      forward into this milestone too (see M6's note below for what's still left there).
   - Verify: deliberately test contrasting inputs (sustained note, silence, shouting, normal
     singing) and sanity-check the score reacts in the right direction — this is subjective tuning,
     not exact-value testing.
-- [ ] **M6 — Leaderboard UI polish**: sorted/animated leaderboard, final-results screen, full
-      end-to-end run.
+  - Implementation: `client/src/lib/audio/scoreEngine.ts` is a pure `ScoreEngine` class — a
+    rolling ~3s window (30 samples at a 100ms tick) of `{pitchHz, clarity, rms}` combines into a
+    0-100 composite score: 40% energy (rolling RMS vs. a reference volume), 35% steadiness
+    (variance of *voiced-only* semitone values, via `69 + 12*log2(hz/440)` so octave jumps aren't
+    over/under-weighted, decaying via `100*exp(-variance/8)`), 25% participation (fraction of
+    samples with `clarity >= 0.8`, pitchy's own suggested threshold). Pure/DOM-independent, so it
+    has a real Vitest suite (`scoreEngine.test.ts`) directly covering the plan's own contrasting
+    inputs (sustained/silence/shouting/normal singing map to distinct, correctly-ordered scores)
+    instead of needing real vocal input to sanity-check the math. `client/src/lib/audio/
+    PitchAnalyzer.ts` is the thin Web-Audio wrapper (AnalyserNode + `pitchy`'s
+    `PitchDetector.forFloat32Array`) around the *same* `MediaStream` already captured for WebRTC in
+    M2 — no double mic capture; this class touches real browser audio APIs unavailable in Vitest's
+    jsdom, so it's only verified live. `client/src/pages/PlayerPage.tsx` ticks the analyzer every
+    100ms (updates the local meter/score) and throttles a `player:score-update` socket emit every
+    500ms; both are torn down in the existing `stopMic()`. `client/src/components/player/
+    ScoreMeter.tsx` is the chosen simple visualizer (volume bar + numeric score).
+    Server: `server/src/rooms/types.ts` gained `score: number` on `Player`/`PlayerSummary`
+    (matching what `ARCHITECTURE.md`'s original Room sketch already specified), and
+    `playerHandlers.ts` gained a `player:score-update` handler (validates a finite number, clamps
+    to `[0,100]`, updates the stored player, rebroadcasts the existing `room:players` event — no
+    new event needed on the host side) with its own test suite
+    (`playerHandlers.test.ts`, same `vi.fn()` io/socket-double pattern as `signalingHandlers.test.ts`).
+    Host: `client/src/components/host/Leaderboard.tsx` (the file `ARCHITECTURE.md`'s file-tree
+    sketch had already planned for) sorts `players` by score descending and renders a compact
+    ranked list; `YoutubeStage.tsx` renders it top-left (room-code badge owns top-right, video
+    controls own bottom-right). Verified live: joining showed a live-updating meter reacting to
+    real ambient room audio (rising and falling correctly), and pasting a video showed the host's
+    Leaderboard update live as the score changed (10 → 33 during the same short clip).
+- [ ] **M6 — Leaderboard polish + final results**: animated transitions on rank changes, a
+      dedicated final-results screen on video end, and the full real-multi-phone end-to-end run
+      (the sorted live leaderboard itself now already exists as of M5).
   - Verify: full run-through — create room, 2+ phones join, pick a real karaoke video, sing
     together, watch the leaderboard update live, confirm final-results screen on video end, and
     test a late joiner mid-song.
