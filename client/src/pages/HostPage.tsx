@@ -5,12 +5,14 @@ import RoomCodeQr from "../components/host/RoomCodeQr";
 import WaitingRoom from "../components/host/WaitingRoom";
 import VideoUrlForm from "../components/host/VideoUrlForm";
 import YoutubeStage from "../components/host/YoutubeStage";
+import FinalResults from "../components/host/FinalResults";
 
 export default function HostPage() {
   const [code, setCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [livePlayerIds, setLivePlayerIds] = useState<Set<string>>(new Set());
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [showResults, setShowResults] = useState(false);
 
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const knownPlayerIdsRef = useRef<Set<string>>(new Set());
@@ -91,6 +93,25 @@ export default function HostPage() {
     };
   }, []);
 
+  function handleVideoEnded() {
+    getSocket().emit("host:video-ended");
+    setShowResults(true);
+  }
+
+  function handlePlayAnother() {
+    setShowResults(false);
+    setVideoId(null);
+  }
+
+  function handlePickVideo(nextVideoId: string) {
+    getSocket().emit("host:video-started");
+    setVideoId(nextVideoId);
+  }
+
+  if (showResults) {
+    return <FinalResults players={players} onPlayAnother={handlePlayAnother} />;
+  }
+
   if (code && videoId) {
     return (
       <YoutubeStage
@@ -98,6 +119,7 @@ export default function HostPage() {
         roomCode={code}
         players={players}
         onChangeVideo={() => setVideoId(null)}
+        onVideoEnded={handleVideoEnded}
       />
     );
   }
@@ -109,7 +131,7 @@ export default function HostPage() {
         <>
           <RoomCodeQr code={code} />
           <WaitingRoom players={players} livePlayerIds={livePlayerIds} />
-          <VideoUrlForm onSubmit={setVideoId} />
+          <VideoUrlForm onSubmit={handlePickVideo} />
         </>
       ) : (
         <p className="text-slate-400">Creating room…</p>

@@ -9,6 +9,7 @@ interface YoutubeStageProps {
   roomCode: string;
   players: PlayerSummary[];
   onChangeVideo: () => void;
+  onVideoEnded: () => void;
 }
 
 const PLAYER_OPTS = {
@@ -27,6 +28,7 @@ export default function YoutubeStage({
   roomCode,
   players,
   onChangeVideo,
+  onVideoEnded,
 }: YoutubeStageProps) {
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -59,7 +61,7 @@ export default function YoutubeStage({
           className="absolute inset-0"
           iframeClassName="h-full w-full"
           onError={handleError}
-          onEnd={onChangeVideo}
+          onEnd={onVideoEnded}
         />
       )}
 

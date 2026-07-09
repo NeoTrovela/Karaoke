@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getSocket } from "../lib/socket";
+import { getSocket, type PlayerSummary } from "../lib/socket";
 import { PlayerPeerConnection } from "../lib/webrtc/PlayerPeerConnection";
 import { PitchAnalyzer } from "../lib/audio/PitchAnalyzer";
 import { ScoreEngine } from "../lib/audio/scoreEngine";
 import JoinForm from "../components/player/JoinForm";
 import ScoreMeter from "../components/player/ScoreMeter";
+import SongResult from "../components/player/SongResult";
 
 type JoinRoomResponse = { ok: true; code: string } | { ok: false; error: string };
 
@@ -21,6 +22,7 @@ export default function PlayerPage() {
   const [micLive, setMicLive] = useState(false);
   const [score, setScore] = useState(0);
   const [volume, setVolume] = useState(0);
+  const [lastResults, setLastResults] = useState<PlayerSummary[] | null>(null);
 
   const peerRef = useRef<PlayerPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -55,9 +57,19 @@ export default function PlayerPage() {
       setRoomClosed(true);
       stopMic();
     }
+    function handleVideoEnded({ players }: { players: PlayerSummary[] }) {
+      setLastResults(players);
+    }
+    function handleVideoStarted() {
+      setLastResults(null);
+    }
     socket.on("room:closed", handleRoomClosed);
+    socket.on("room:video-ended", handleVideoEnded);
+    socket.on("room:video-started", handleVideoStarted);
     return () => {
       socket.off("room:closed", handleRoomClosed);
+      socket.off("room:video-ended", handleVideoEnded);
+      socket.off("room:video-started", handleVideoStarted);
     };
   }, [joinedCode]);
 
@@ -135,7 +147,10 @@ export default function PlayerPage() {
             <>Waiting for the host to start room <span className="font-mono">{joinedCode}</span>…</>
           )}
         </p>
-        {!roomClosed && micLive && <ScoreMeter score={score} volume={volume} />}
+        {!roomClosed && lastResults && (
+          <SongResult players={lastResults} ownId={getSocket().id ?? ""} />
+        )}
+        {!roomClosed && !lastResults && micLive && <ScoreMeter score={score} volume={volume} />}
       </div>
     );
   }
