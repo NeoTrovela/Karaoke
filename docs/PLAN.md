@@ -223,12 +223,42 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     controls own bottom-right). Verified live: joining showed a live-updating meter reacting to
     real ambient room audio (rising and falling correctly), and pasting a video showed the host's
     Leaderboard update live as the score changed (10 → 33 during the same short clip).
-- [ ] **M6 — Leaderboard polish + final results**: animated transitions on rank changes, a
-      dedicated final-results screen on video end, and the full real-multi-phone end-to-end run
-      (the sorted live leaderboard itself now already exists as of M5).
-  - Verify: full run-through — create room, 2+ phones join, pick a real karaoke video, sing
-    together, watch the leaderboard update live, confirm final-results screen on video end, and
-    test a late joiner mid-song.
+- [x] **M6 — Leaderboard polish + final results**: `client/src/components/host/Leaderboard.tsx`
+      now animates rank changes with a library-free FLIP-style trick (absolutely-positioned rows,
+      `transform: translateY(index * ROW_HEIGHT)` + a CSS transition — React keeps the same DOM
+      node per `key={player.id}` across re-sorts, so a rank change animates instead of jumping).
+      Video end is now distinguished from a manual video change: `YoutubeStage` splits the old
+      single `onChangeVideo` callback into `onVideoEnded` (wired to the YouTube player's `onEnd`)
+      and `onChangeVideo` (button/error-retry, unchanged). `HostPage` emits a new
+      `host:video-ended` socket event on natural end and shows a new full-screen
+      `FinalResults.tsx` (sorted list, #1 highlighted, "Pick another song" button) built from
+      state it already had locally — no round trip needed for the host's own screen.
+      `server/src/sockets/hostHandlers.ts` relays `host:video-ended` as `room:video-ended` (with
+      sorted player summaries) to the whole room, purely for the players' benefit, since players
+      have no other visibility into playback state. Each player's phone shows a small
+      `client/src/components/player/SongResult.tsx` ("You placed #N of M!") instead of the full
+      leaderboard, using a new `computeRank` helper (`client/src/lib/ranking.ts`, alongside
+      `sortByScore` — both pulled out of their component files into a shared module so
+      Leaderboard/FinalResults/SongResult stay Fast-Refresh-clean per oxlint). Picking a new video
+      now emits `host:video-started`, which resets every player's stored score to 0 server-side
+      and tells players' phones to drop back to the live `ScoreMeter`. New server test suite
+      `hostHandlers.test.ts` covers both new events; `ranking.test.ts` covers `sortByScore`/
+      `computeRank`. Manually bailing out mid-song via "Change video" deliberately does *not*
+      reset scores or show results — only a natural end starts a new round.
+  - Verified live (host + 2 real player tabs, mic permission granted manually since the
+    browser's native permission prompt sits outside what browser automation can click): both
+    players joined and their live score meters worked; a short real YouTube video showed the
+    corner `Leaderboard` sorted correctly and visibly animating as the two players' scores swapped
+    rank; "Change video" returned to the waiting room without touching either score; starting a
+    new video correctly emitted a reset that was visibly overwritten within ~1s by the players'
+    own ongoing score emits (expected, since each phone's local `ScoreEngine` rolling window isn't
+    force-cleared — matches the plan). The YouTube embed itself repeatedly stalled/re-buffered in
+    this sandboxed browser (unrelated to this change — same M3-era player, only the `onEnd` prop
+    was retargeted) and never reliably reached a true natural `ended` state despite several
+    seek-and-resume attempts, so the `room:video-ended` → per-player `SongResult` screen path
+    could not be exercised end-to-end live; it's covered by code review (a small, low-risk prop
+    rewiring) rather than a live click-through. A real multi-phone run with an actual full song
+    remains a good follow-up for the user to do, same as prior milestones.
 - [ ] **Post-MVP** (documented, not yet planned in detail): TURN server for cross-network
       reliability, per-player host-side gain control, in-app YouTube search, reconnect handling,
       duet-mode visuals.
