@@ -28,44 +28,68 @@ function clamp(value: number, min: number, max: number): number {
 // grading - see docs/ARCHITECTURE.md's design decisions for why.
 export class ScoreEngine {
   private samples: AudioSample[] = [];
+  // Every sample since the last reset() (a full song), not windowed - used
+  // for a fairer end-of-song score than whatever the rolling window says at
+  // the exact instant the video ends.
+  private sessionSamples: AudioSample[] = [];
 
   addSample(sample: AudioSample): void {
     this.samples.push(sample);
     if (this.samples.length > WINDOW_SIZE) {
       this.samples.shift();
     }
+    this.sessionSamples.push(sample);
+  }
+
+  reset(): void {
+    this.samples = [];
+    this.sessionSamples = [];
   }
 
   getVolume(): number {
-    if (this.samples.length === 0) return 0;
-    const avgRms = this.samples.reduce((sum, s) => sum + s.rms, 0) / this.samples.length;
-    return clamp((avgRms / REFERENCE_RMS) * 100, 0, 100);
+    return this.computeVolume(this.samples);
   }
 
   getScore(): number {
-    if (this.samples.length === 0) return 0;
+    return this.computeScore(this.samples);
+  }
+
+  getSessionScore(): number {
+    return this.computeScore(this.sessionSamples);
+  }
+
+  private computeScore(samples: AudioSample[]): number {
+    if (samples.length === 0) return 0;
     const composite =
-      this.getVolume() * 0.4 + this.getSteadiness() * 0.35 + this.getParticipation() * 0.25;
+      this.computeVolume(samples) * 0.4 +
+      this.computeSteadiness(samples) * 0.35 +
+      this.computeParticipation(samples) * 0.25;
     return Math.round(clamp(composite, 0, 100));
   }
 
-  private getVoicedSemitones(): number[] {
-    return this.samples
+  private computeVolume(samples: AudioSample[]): number {
+    if (samples.length === 0) return 0;
+    const avgRms = samples.reduce((sum, s) => sum + s.rms, 0) / samples.length;
+    return clamp((avgRms / REFERENCE_RMS) * 100, 0, 100);
+  }
+
+  private getVoicedSemitones(samples: AudioSample[]): number[] {
+    return samples
       .filter((s) => s.clarity >= CLARITY_THRESHOLD)
       .map((s) => hzToSemitone(s.pitchHz));
   }
 
-  private getSteadiness(): number {
-    const semitones = this.getVoicedSemitones();
+  private computeSteadiness(samples: AudioSample[]): number {
+    const semitones = this.getVoicedSemitones(samples);
     if (semitones.length < MIN_VOICED_FOR_STEADINESS) return 0;
     const mean = semitones.reduce((sum, v) => sum + v, 0) / semitones.length;
     const variance = semitones.reduce((sum, v) => sum + (v - mean) ** 2, 0) / semitones.length;
     return clamp(100 * Math.exp(-variance / STEADINESS_DECAY), 0, 100);
   }
 
-  private getParticipation(): number {
-    if (this.samples.length === 0) return 0;
-    const voicedCount = this.samples.filter((s) => s.clarity >= CLARITY_THRESHOLD).length;
-    return clamp((voicedCount / this.samples.length) * 100, 0, 100);
+  private computeParticipation(samples: AudioSample[]): number {
+    if (samples.length === 0) return 0;
+    const voicedCount = samples.filter((s) => s.clarity >= CLARITY_THRESHOLD).length;
+    return clamp((voicedCount / samples.length) * 100, 0, 100);
   }
 }

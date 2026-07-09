@@ -6,13 +6,17 @@ import WaitingRoom from "../components/host/WaitingRoom";
 import VideoUrlForm from "../components/host/VideoUrlForm";
 import YoutubeStage from "../components/host/YoutubeStage";
 import FinalResults from "../components/host/FinalResults";
+import SessionEnded from "../components/host/SessionEnded";
+import EndSessionButton from "../components/host/EndSessionButton";
 
 export default function HostPage() {
   const [code, setCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
   const [livePlayerIds, setLivePlayerIds] = useState<Set<string>>(new Set());
+  const [mutedPlayerIds, setMutedPlayerIds] = useState<Set<string>>(new Set());
   const [videoId, setVideoId] = useState<string | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(false);
 
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const knownPlayerIdsRef = useRef<Set<string>>(new Set());
@@ -108,8 +112,37 @@ export default function HostPage() {
     setVideoId(nextVideoId);
   }
 
+  function handleToggleMute(playerId: string) {
+    const audio = audioElementsRef.current.get(playerId);
+    if (audio) audio.muted = !audio.muted;
+    setMutedPlayerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else {
+        next.add(playerId);
+      }
+      return next;
+    });
+  }
+
+  function handleEndSession() {
+    getSocket().emit("host:end-session");
+    setSessionEnded(true);
+  }
+
+  if (sessionEnded) {
+    return <SessionEnded onStartNew={() => window.location.reload()} />;
+  }
+
   if (showResults) {
-    return <FinalResults players={players} onPlayAnother={handlePlayAnother} />;
+    return (
+      <FinalResults
+        players={players}
+        onPlayAnother={handlePlayAnother}
+        onEndSession={handleEndSession}
+      />
+    );
   }
 
   if (code && videoId) {
@@ -118,8 +151,11 @@ export default function HostPage() {
         videoId={videoId}
         roomCode={code}
         players={players}
+        mutedPlayerIds={mutedPlayerIds}
+        onToggleMute={handleToggleMute}
         onChangeVideo={() => setVideoId(null)}
         onVideoEnded={handleVideoEnded}
+        onEndSession={handleEndSession}
       />
     );
   }
@@ -130,8 +166,14 @@ export default function HostPage() {
       {code ? (
         <>
           <RoomCodeQr code={code} />
-          <WaitingRoom players={players} livePlayerIds={livePlayerIds} />
+          <WaitingRoom
+            players={players}
+            livePlayerIds={livePlayerIds}
+            mutedPlayerIds={mutedPlayerIds}
+            onToggleMute={handleToggleMute}
+          />
           <VideoUrlForm onSubmit={handlePickVideo} />
+          <EndSessionButton onConfirm={handleEndSession} />
         </>
       ) : (
         <p className="text-slate-400">Creating room…</p>
