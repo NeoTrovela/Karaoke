@@ -1,16 +1,21 @@
 import type { PlayerSummary } from "../../lib/socket";
 import { sortByScore } from "../../lib/ranking";
+import EndSessionButton from "./EndSessionButton";
 
 interface FinalResultsProps {
   players: PlayerSummary[];
   onPlayAnother: () => void;
+  onEndSession: () => void;
 }
 
-export default function FinalResults({ players, onPlayAnother }: FinalResultsProps) {
+export default function FinalResults({ players, onPlayAnother, onEndSession }: FinalResultsProps) {
   const ranked = sortByScore(players);
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-8 bg-slate-950 text-white">
+      <div className="fixed top-4 right-4">
+        <EndSessionButton onConfirm={onEndSession} />
+      </div>
       <h1 className="text-4xl font-bold">Final Results</h1>
       <ol className="flex w-full max-w-md flex-col gap-2">
         {ranked.map((player, index) => (

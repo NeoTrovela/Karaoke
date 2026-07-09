@@ -74,4 +74,45 @@ describe("ScoreEngine", () => {
     feed(engine, { pitchHz: 440, clarity: 0.95, rms: 0.2 }, 30);
     expect(engine.getScore()).toBeGreaterThan(85);
   });
+
+  describe("getSessionScore", () => {
+    it("returns 0 with no samples", () => {
+      expect(new ScoreEngine().getSessionScore()).toBe(0);
+    });
+
+    it("stays high even if the singer goes quiet right at the very end", () => {
+      const engine = new ScoreEngine();
+      // ~27s of a great performance, at the 100ms tick rate PlayerPage.tsx uses.
+      feed(engine, { pitchHz: 440, clarity: 0.95, rms: 0.2 }, 270);
+      // Then trails off to silence right as the song ends - only the last
+      // ~3s the rolling window sees.
+      feed(engine, { pitchHz: 0, clarity: 0, rms: 0 }, 30);
+
+      expect(engine.getScore()).toBeLessThan(10);
+      expect(engine.getSessionScore()).toBeGreaterThan(85);
+    });
+
+    it("reflects the whole session, not just the rolling window", () => {
+      const engine = new ScoreEngine();
+      feed(engine, { pitchHz: 0, clarity: 0, rms: 0 }, 30);
+      feed(engine, { pitchHz: 440, clarity: 0.95, rms: 0.2 }, 30);
+
+      // Rolling window only sees the good half; session sees both halves.
+      expect(engine.getScore()).toBeGreaterThan(engine.getSessionScore());
+    });
+  });
+
+  describe("reset", () => {
+    it("clears both the rolling window and the session history", () => {
+      const engine = new ScoreEngine();
+      feed(engine, { pitchHz: 440, clarity: 0.95, rms: 0.2 }, 30);
+      expect(engine.getScore()).toBeGreaterThan(0);
+      expect(engine.getSessionScore()).toBeGreaterThan(0);
+
+      engine.reset();
+
+      expect(engine.getScore()).toBe(0);
+      expect(engine.getSessionScore()).toBe(0);
+    });
+  });
 });

@@ -153,6 +153,29 @@ host as a sorted leaderboard.
   permission UI is designed around this from the start rather than retrofitted.
 - **Single Node process, in-memory state**: a server restart drops all active rooms — acceptable
   for a single live party session, not meant to be long-running/persistent infrastructure.
+- **Some YouTube videos can't be embedded**: rights holders can disable playback outside
+  youtube.com (YouTube IFrame API error codes 101/150), and many official/label-owned karaoke
+  videos do this. `errorMessages.ts` + `YoutubeStage`'s error state already handle it gracefully
+  (a friendly message and "Try another video," not a crash), but the underlying gap — some good
+  karaoke videos just can't play here — is a rights-holder restriction this app can't override.
+  In-app YouTube search (below) using the Data API's `videoEmbeddable` filter would help users
+  avoid picking a restricted video in the first place, but that's still a mitigation, not a fix.
+
+### Future exploration: lyric/timing-synced scoring (not built, not planned in detail)
+
+Today's score (see `client/src/lib/audio/scoreEngine.ts`) is a "fun" heuristic — rolling volume +
+pitch steadiness + voiced-frame participation — computed purely from the mic signal, with no
+concept of *when in the song* a strong or weak moment happens. A more accurate system would weight
+scoring against the actual song content (e.g. only score during vocal sections, or compare against
+a reference melody), but there's currently no data source in this app to do that: the YouTube
+IFrame API gives playback control only (no captions/timing access, no decoded audio), and there's
+no per-song reference-pitch or lyrics dataset. Two directions worth exploring later, neither
+committed to: (a) manually or crowd-sourced per-song timing markers (verse/chorus windows) that
+the host could optionally load alongside a video URL, or (b) investigating whether YouTube's
+`timedtext` captions track is fetchable and usable for the subset of videos that happen to have
+official synced lyrics (most karaoke videos don't). Both add real scope and a new content-coverage
+problem of their own — this is a documented idea to revisit if scoring accuracy becomes a bigger
+priority than the current "fun" framing, not a near-term plan.
 
 ## Build roadmap
 
@@ -168,5 +191,11 @@ host as a sorted leaderboard.
 6. **M5 — Client-side scoring engine**: pitch/volume analysis, composite score, live visualizer.
 7. **M6 — Leaderboard UI polish**: sorted/animated leaderboard, final-results screen, full
    end-to-end run with real phones singing along to a real video.
-8. **Post-MVP (documented, not built)**: TURN server integration, per-player host-side gain
-   control, in-app YouTube search, reconnect handling, duet-mode visuals.
+8. **M7 — Mic controls, session management, fairer scoring**: player self-mute and host-side
+   per-player mute (both local, no new server state beyond the end-session event below); an
+   explicit "End session" action instead of relying on the host's socket disconnecting; and a
+   fairer end-of-song score (`ScoreEngine.getSessionScore()`, a whole-song average) so a song's
+   final ranking isn't just whatever the ~3s rolling window happened to show at the exact instant
+   the video ended.
+9. **Post-MVP (documented, not built)**: TURN server integration, finer-grained per-player volume
+   control beyond on/off mute, in-app YouTube search, reconnect handling, duet-mode visuals.

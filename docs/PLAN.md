@@ -259,9 +259,50 @@ Four decisions were locked in before building, and shouldn't be revisited withou
     could not be exercised end-to-end live; it's covered by code review (a small, low-risk prop
     rewiring) rather than a live click-through. A real multi-phone run with an actual full song
     remains a good follow-up for the user to do, same as prior milestones.
+- [x] **M7 — Mic controls, session management, fairer scoring**: three things the user raised
+      after trying the app post-M6. (1) Mute: players get a self-mute toggle
+      (`PlayerPage.tsx` disables the outgoing WebRTC audio track via
+      `track.enabled = false` and pauses local score sampling while muted — purely client-side,
+      no server change); the host gets a per-player mute toggle in `WaitingRoom.tsx` and
+      `Leaderboard.tsx` that flips `audio.muted` on the host's own already-owned `<audio>`
+      element — also purely local, no server/protocol change needed for either direction.
+      (2) End session: a new `host:end-session` socket event (factored to share its
+      room-closing logic with the existing `disconnect` handler) plus a reusable
+      `EndSessionButton.tsx` with an inline two-step confirm (not a native `window.confirm()`,
+      to stay consistent with the rest of the UI and stay scriptable for testing), rendered
+      across the waiting room, `YoutubeStage`, and `FinalResults`. A new `SessionEnded.tsx`
+      screen offers "Start new room" (`window.location.reload()`).
+      (3) Fairer scoring: `ScoreEngine` gained a second, unbounded `sessionSamples` array
+      alongside the existing rolling window, plus `getSessionScore()` (whole-song average) and
+      `reset()`. `room:video-ended` is now a bare event (mirroring `room:video-started`) instead
+      of carrying a frozen player snapshot; each player computes and sends its own
+      `getSessionScore()` right as results appear, and `PlayerPage` now also subscribes to
+      `room:players` so `SongResult` reflects live, self-correcting standings instead of a
+      one-shot snapshot.
+  - **Bug found and fixed during live verification**: the first working version paused the
+    analysis/emit intervals on video-end but didn't defend `startAnalysisLoop()` against being
+    called more than once without an intervening pause. React's `<StrictMode>` (enabled in
+    `main.tsx`, dev-only) double-invokes effects, which turned out to trigger exactly that path —
+    the result was a silently orphaned interval running forever alongside the new one, which
+    nobody was still holding a reference to clear. Symptom: scores kept drifting for seconds
+    after the results screen appeared instead of freezing, confirmed via temporary console
+    logging that showed multiple live `analysisId`/`emitId` pairs active at once. Fix:
+    `startAnalysisLoop()` now unconditionally calls `pauseAnalysisLoop()` first, making it
+    idempotent regardless of how many times or in what order it's invoked.
+  - Verified live (host + 2 real player tabs, real natural YouTube playback — no seek/fiber
+    tricks needed for the final passing run): self-mute silenced a player's audio at the host
+    without affecting the other player or pausing their own score; host-side mute silenced a
+    specific player's playback without touching their score; after the interval fix, a full
+    song's natural end left the host's `FinalResults`, both players' own `SongResult` screens,
+    and a 10-second stability check all showing the *exact same* final numbers (e.g. `Ana 37,
+    Neo 34` everywhere, unchanged after waiting); "End session" showed the inline confirm,
+    then closed the room for both players (`Room closed` on each phone) and showed the host
+    `Session ended` screen. No console errors on any of the three tabs throughout.
 - [ ] **Post-MVP** (documented, not yet planned in detail): TURN server for cross-network
-      reliability, per-player host-side gain control, in-app YouTube search, reconnect handling,
-      duet-mode visuals.
+      reliability, finer-grained per-player volume control beyond on/off mute, in-app YouTube
+      search, reconnect handling, duet-mode visuals. Lyric/timing-synced scoring accuracy is a
+      documented future exploration (see `ARCHITECTURE.md`), not planned in detail — no data
+      source exists today to weight scoring against actual song content.
   - Deployment: split into two deploys — static client build to Vercel/Netlify/Cloudflare Pages,
     and a small always-on Node process for the Express+Socket.io signaling server on a platform
     with real persistent WebSocket support (Render/Fly.io/Railway/a VPS — not typical serverless
@@ -292,6 +333,9 @@ These inform decisions at every milestone above, not just one — see
   `AudioContext` may start `suspended` until a user gesture resumes it.
 - **In-memory server state**: a server restart drops all active rooms — acceptable for a single
   live party session.
+- **Some YouTube videos can't be embedded**: rights holders can disable outside-YouTube playback
+  (error 101/150); already handled gracefully (friendly message + "Try another video"), but the
+  underlying restriction isn't something this app can override.
 
 ## General verification approach
 

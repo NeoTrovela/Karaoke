@@ -44,7 +44,7 @@ describe("registerHostHandlers", () => {
   }
 
   describe("host:video-ended", () => {
-    it("broadcasts room:video-ended with sorted-able player summaries", () => {
+    it("broadcasts a bare room:video-ended (players compute their own final score)", () => {
       const { room, handlers } = createHost("host-1");
       room.players.set("player-1", { id: "player-1", displayName: "Neo", score: 30 });
       fakeIo.emit.mockClear();
@@ -53,9 +53,7 @@ describe("registerHostHandlers", () => {
       handlers.get("host:video-ended")?.();
 
       expect(fakeIo.to).toHaveBeenCalledWith(room.code);
-      expect(fakeIo.emit).toHaveBeenCalledWith("room:video-ended", {
-        players: [{ id: "player-1", displayName: "Neo", score: 30 }],
-      });
+      expect(fakeIo.emit).toHaveBeenCalledWith("room:video-ended");
     });
 
     it("is a no-op for a socket that isn't hosting a room", () => {
@@ -94,6 +92,28 @@ describe("registerHostHandlers", () => {
       registerHostHandlers(fakeIo.io, socket, roomStore);
 
       expect(() => handlers.get("host:video-started")?.()).not.toThrow();
+      expect(fakeIo.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("host:end-session", () => {
+    it("broadcasts room:closed and removes the room", () => {
+      const { room, handlers } = createHost("host-1");
+      fakeIo.emit.mockClear();
+      fakeIo.to.mockClear();
+
+      handlers.get("host:end-session")?.();
+
+      expect(fakeIo.to).toHaveBeenCalledWith(room.code);
+      expect(fakeIo.emit).toHaveBeenCalledWith("room:closed");
+      expect(roomStore.getRoom(room.code)).toBeUndefined();
+    });
+
+    it("is a no-op for a socket that isn't hosting a room", () => {
+      const { socket, handlers } = createFakeSocket("stray-host");
+      registerHostHandlers(fakeIo.io, socket, roomStore);
+
+      expect(() => handlers.get("host:end-session")?.()).not.toThrow();
       expect(fakeIo.emit).not.toHaveBeenCalled();
     });
   });

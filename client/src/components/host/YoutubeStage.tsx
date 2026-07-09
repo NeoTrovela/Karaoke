@@ -3,13 +3,17 @@ import YouTube, { type YouTubeEvent } from "react-youtube";
 import { describeYoutubeError } from "../../lib/youtube/errorMessages";
 import type { PlayerSummary } from "../../lib/socket";
 import Leaderboard from "./Leaderboard";
+import EndSessionButton from "./EndSessionButton";
 
 interface YoutubeStageProps {
   videoId: string;
   roomCode: string;
   players: PlayerSummary[];
+  mutedPlayerIds: Set<string>;
+  onToggleMute: (playerId: string) => void;
   onChangeVideo: () => void;
   onVideoEnded: () => void;
+  onEndSession: () => void;
 }
 
 const PLAYER_OPTS = {
@@ -27,8 +31,11 @@ export default function YoutubeStage({
   videoId,
   roomCode,
   players,
+  mutedPlayerIds,
+  onToggleMute,
   onChangeVideo,
   onVideoEnded,
+  onEndSession,
 }: YoutubeStageProps) {
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +76,11 @@ export default function YoutubeStage({
         Room: {roomCode}
       </div>
 
-      <Leaderboard players={players} />
+      <Leaderboard players={players} mutedPlayerIds={mutedPlayerIds} onToggleMute={onToggleMute} />
+
+      <div className="fixed top-16 right-4">
+        <EndSessionButton onConfirm={onEndSession} />
+      </div>
 
       {!error && (
         <div className="fixed bottom-4 right-4 flex gap-2">
